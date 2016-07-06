@@ -1,0 +1,213 @@
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.
+
+// First crack at TLS 1.2 (RFC 5246)
+
+//use packet::PrimitiveValues;
+use packet::Packet;
+
+use pnet_macros_support::types::*;
+
+/// TLS Record Content Types
+#[allow(non_snake_case)]
+#[allow(non_upper_case_globals)]
+pub mod TlsContentType {
+    //use pnet_macros_support::types::*;
+
+    /// Change Cipher Specification (begin encryption)
+    pub const ChangeCipherSpec: u8 = 20;
+    /// Alert record (error occurred)
+    pub const Alert : u8 = 21;
+    /// Handshake (ClientHello, ServerHello, Certificate, KeyExchange, Finished, etc)
+    pub const Handshake : u8 = 22;
+    /// Encrypted Data record
+    pub const ApplicationData : u8 = 23;
+}
+
+/// TLS Handshake Types
+#[allow(non_snake_case)]
+#[allow(non_upper_case_globals)]
+pub mod TlsHandshakeType {
+    //use pnet_macros_support::types::*;
+
+    /*
+          hello_request(0), client_hello(1), server_hello(2),
+          certificate(11), server_key_exchange (12),
+          certificate_request(13), server_hello_done(14),
+          certificate_verify(15), client_key_exchange(16),
+          finished(20), (255)
+    */
+    /// Hello Request (rarely used)
+    pub const HelloRequest : u8 = 0;
+    /// Client Hello
+    pub const ClientHello : u8 = 1;
+    /// Server Hello
+    pub const ServerHello : u8 = 2;
+    /// Server Certificate
+    pub const Certificate : u8 = 11;
+    /// Server Key Exchange (optional)
+    pub const ServerKeyExchange : u8 = 12;
+    /// Client Certificate Request (rarely used)
+    pub const CertificateRequest : u8 = 13;
+    /// Server Hello Done
+    pub const ServerHelloDone : u8 = 14;
+    /// Certificate Verify
+    pub const CertificateVerify : u8 = 15;
+    /// Client Key Exchange
+    pub const ClientKeyExchange : u8 = 16;
+    /// Finished message (sent by Client and Server)
+    pub const Finished : u8 = 20;
+}
+
+/// Represents a TLS record packet
+#[packet]
+pub struct TlsRecord {
+    content_type: u8,
+    version: u16be,
+    length: u16be,
+
+    #[length = "length"]
+    #[payload]
+    payload: Vec<u8>,
+}
+
+/// TLS Handshake packet, generally wrapped in a TLS Record
+#[packet]
+pub struct TlsHandshake {
+    handshake_type: u8,
+    length: u24be,
+    #[payload]
+    payload: Vec<u8>,
+}
+
+/// TLS Extensions can appear in ClientHello and ServerHello packets
+#[packet]
+pub struct TlsExtension {
+    extension_type: u16be,
+    length: u16be,
+
+    #[length = "length"]
+    #[payload]
+    payload: Vec<u8>,
+}
+
+/// ClientHello, wrapped by a TlsHandshake (which is wrapped by a TlsRecord)
+#[packet]
+pub struct TlsClientHello {
+    client_version: u16be,
+    #[length = "32"]
+    random: Vec<u8>,
+
+    session_id_length: u8,
+    #[length = "session_id_length"]
+    session_id: Vec<u8>,
+
+    cipher_suites_length: u16be,
+    #[length = "cipher_suites_length"]
+    cipher_suites: Vec<u8>,
+
+    compression_methods_length: u8,
+    #[length = "compression_methods_length"]
+    compression_methods: Vec<u8>,
+
+    extensions_length: u16be,
+    #[length = "extensions_length"]
+    extensions: Vec<TlsExtension>,
+
+    #[payload]
+    payload: Vec<u8>,   // Unused? Fragment for next packet?
+}
+
+/// TLS alert packet (wrapped by a TlsRecord)
+#[packet]
+pub struct TlsAlert {
+    alert_level: u8,
+    alert_description: u8,
+    // TODO
+    #[payload]
+    payload: Vec<u8>,
+}
+
+/// Application Data (wrapped by a TlsRecord)
+#[packet]
+pub struct TlsApplicationData {
+    // TODO
+    #[payload]
+    payload: Vec<u8>,
+}
+
+
+#[test]
+fn tls_client_hello_test() {
+    let mut packet = [0u8; 88];
+    {
+        let mut tls_record = MutableTlsRecordPacket::new(&mut packet[..]).unwrap();
+
+        tls_record.set_content_type(TlsContentType::Handshake);
+        tls_record.set_version(0x0301);
+        //tls_record.set_length();
+
+    }
+
+    {
+        let mut tls_handshake = MutableTlsHandshakePacket::new(&mut packet[5..]).unwrap();
+        tls_handshake.set_handshake_type(TlsHandshakeType::ClientHello);
+        //tls_handshake.set_length();
+    }
+
+    {
+        let mut tls_hello = MutableTlsClientHelloPacket::new(&mut packet[9..]).unwrap();
+
+        tls_hello.set_client_version(0x0303);
+        tls_hello.set_random(&vec![0xae, 0xf5, 0x79, 0x3a, 0x91, 0x9e, 0x59, 0x31, 0x33, 0x76, 0x76, 0xbc, 0x44, 0x5b, 0xda, 0xa4, 0xe6, 0xc6, 0x66, 0xd5, 0x7a, 0xff, 0x77, 0x4e, 0x4f, 0x11, 0xd1, 0x54, 0xeb, 0x2c, 0x89, 0x24]);
+        tls_hello.set_session_id(&vec![]);
+        tls_hello.set_cipher_suites(&vec![0xc02b, 0x2bc0, 0xc02f, 0x2f00, 0x009e, 0x9e00, 0x009c, 0x9cc0, 0xc00a, 0x0ac0, 0xc014, 0x1400, 0x0039, 0x3900, 0x0035, 0x35c0, 0xc007, 0x07c0, 0xc009]);
+        tls_hello.set_compression_methods(&vec![0x00]);
+        //let ec_pts_fmt = TlsExtension::new(
+    }
+
+    let ref_pkt = [0x16, 0x3, 0x1, 0x0, 0xc0, 0x1, 0x0, 0x0, 0xbc, 0x3, 0x3, 0xae, 0xf5, 0x79, 0x3a, 0x91, 0x9e, 0x59, 0x31, 0x33, 0x76, 0x76, 0xbc, 0x44, 0x5b, 0xda, 0xa4, 0xe6, 0xc6, 0x66, 0xd5, 0x7a, 0xff, 0x77, 0x4e, 0x4f, 0x11, 0xd1, 0x54, 0xeb, 0x2c, 0x89, 0x24, 0x0, 0x0, 0x26, 0xc0, 0x2b, 0xc0, 0x2f, 0x0, 0x9e, 0x0, 0x9c, 0xc0, 0xa, 0xc0, 0x14, 0x0, 0x39, 0x0, 0x35, 0xc0, 0x7, 0xc0, 0x9, 0xc0, 0x11, 0xc0, 0x13, 0x0, 0x33, 0x0, 0x32, 0x0, 0x5, 0x0, 0x4, 0x0, 0x2f, 0x0, 0xa, 0x0, 0xff, 0x1, 0x0, 0x0, 0x6d];
+    assert_eq!(&ref_pkt[..], &packet[..]);
+
+}
+
+
+
+/*
+/// Alert descriptions, for TlsAlert
+pub mod TlsAlertDescription {
+    //use pnet_macros_support::types::*;
+
+    TODO
+          close_notify(0),
+          unexpected_message(10),
+          bad_record_mac(20),
+          decryption_failed_RESERVED(21),
+          record_overflow(22),
+          decompression_failure(30),
+          handshake_failure(40),
+          no_certificate_RESERVED(41),
+          bad_certificate(42),
+          unsupported_certificate(43),
+          certificate_revoked(44),
+          certificate_expired(45),
+          certificate_unknown(46),
+          illegal_parameter(47),
+          unknown_ca(48),
+          access_denied(49),
+          decode_error(50),
+          decrypt_error(51),
+          export_restriction_RESERVED(60),
+          protocol_version(70),
+          insufficient_security(71),
+          internal_error(80),
+          user_canceled(90),
+          no_renegotiation(100),
+          unsupported_extension(110),
+}
+
+*/
+

@@ -34,7 +34,8 @@ mod macros {
         "udp.rs",
         "tcp.rs",
         "arp.rs",
-        "vlan.rs"
+        "vlan.rs",
+        "tls.rs"
     ];
 
     pub fn expand() {
