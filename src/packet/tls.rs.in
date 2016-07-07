@@ -94,6 +94,28 @@ pub struct TlsExtension {
     payload: Vec<u8>,
 }
 
+/*
+/// Cipher suite for client/server hellos
+//#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[packet]
+pub struct CipherSuite {
+    cs: u16be,
+    #[length = "0"]
+    #[payload]
+    payload: Vec<u8>,
+}
+
+/// List of cipher suites
+#[allow(non_snake_case)]
+#[allow(non_upper_case_globals)]
+pub mod CipherSuites {
+      use super::CipherSuite;
+    /// TLS_RSA_WITH_AES_128_CBC_SHA
+    pub const TLS_RSA_WITH_AES_128_CBC_SHA : CipherSuite = CipherSuite{cs: 0x002f};
+
+}
+*/
+
 /// ClientHello, wrapped by a TlsHandshake (which is wrapped by a TlsRecord)
 #[packet]
 pub struct TlsClientHello {
@@ -107,7 +129,7 @@ pub struct TlsClientHello {
 
     cipher_suites_length: u16be,
     #[length = "cipher_suites_length"]
-    cipher_suites: Vec<u8>,
+    cipher_suites: Vec<u16be>,
 
     compression_methods_length: u8,
     #[length = "compression_methods_length"]
@@ -148,14 +170,13 @@ fn tls_client_hello_test() {
 
         tls_record.set_content_type(TlsContentType::Handshake);
         tls_record.set_version(0x0301);
-        //tls_record.set_length();
-
+        tls_record.set_length(192);
     }
 
     {
         let mut tls_handshake = MutableTlsHandshakePacket::new(&mut packet[5..]).unwrap();
         tls_handshake.set_handshake_type(TlsHandshakeType::ClientHello);
-        //tls_handshake.set_length();
+        tls_handshake.set_length(188);
     }
 
     {
@@ -164,7 +185,10 @@ fn tls_client_hello_test() {
         tls_hello.set_client_version(0x0303);
         tls_hello.set_random(&vec![0xae, 0xf5, 0x79, 0x3a, 0x91, 0x9e, 0x59, 0x31, 0x33, 0x76, 0x76, 0xbc, 0x44, 0x5b, 0xda, 0xa4, 0xe6, 0xc6, 0x66, 0xd5, 0x7a, 0xff, 0x77, 0x4e, 0x4f, 0x11, 0xd1, 0x54, 0xeb, 0x2c, 0x89, 0x24]);
         tls_hello.set_session_id(&vec![]);
+
+        tls_hello.set_cipher_suites_length(19*2);
         tls_hello.set_cipher_suites(&vec![0xc02b, 0x2bc0, 0xc02f, 0x2f00, 0x009e, 0x9e00, 0x009c, 0x9cc0, 0xc00a, 0x0ac0, 0xc014, 0x1400, 0x0039, 0x3900, 0x0035, 0x35c0, 0xc007, 0x07c0, 0xc009]);
+        tls_hello.set_compression_methods_length(1);
         tls_hello.set_compression_methods(&vec![0x00]);
         //let ec_pts_fmt = TlsExtension::new(
     }
@@ -173,7 +197,6 @@ fn tls_client_hello_test() {
     assert_eq!(&ref_pkt[..], &packet[..]);
 
 }
-
 
 
 /*
