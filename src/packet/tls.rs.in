@@ -15,7 +15,6 @@ use pnet_macros_support::types::*;
 #[allow(non_snake_case)]
 #[allow(non_upper_case_globals)]
 pub mod TlsContentType {
-    //use pnet_macros_support::types::*;
 
     /// Change Cipher Specification (begin encryption)
     pub const ChangeCipherSpec: u8 = 20;
@@ -94,27 +93,7 @@ pub struct TlsExtension {
     payload: Vec<u8>,
 }
 
-/*
-/// Cipher suite for client/server hellos
-//#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[packet]
-pub struct CipherSuite {
-    cs: u16be,
-    #[length = "0"]
-    #[payload]
-    payload: Vec<u8>,
-}
 
-/// List of cipher suites
-#[allow(non_snake_case)]
-#[allow(non_upper_case_globals)]
-pub mod CipherSuites {
-      use super::CipherSuite;
-    /// TLS_RSA_WITH_AES_128_CBC_SHA
-    pub const TLS_RSA_WITH_AES_128_CBC_SHA : CipherSuite = CipherSuite{cs: 0x002f};
-
-}
-*/
 
 /// ClientHello, wrapped by a TlsHandshake (which is wrapped by a TlsRecord)
 #[packet]
@@ -234,4 +213,16 @@ pub mod TlsAlertDescription {
 }
 
 */
+
+
+
+/// List of cipher suites
+#[allow(non_snake_case)]
+#[allow(non_upper_case_globals)]
+pub mod CipherSuites {
+    use pnet_macros_support::types::*;
+    /// TLS_RSA_WITH_AES_128_CBC_SHA
+    pub const TLS_RSA_WITH_AES_128_CBC_SHA: u16be = 0x002f;
+
+}
 
