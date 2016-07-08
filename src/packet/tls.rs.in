@@ -90,10 +90,104 @@ pub struct TlsExtension {
 
     #[length = "length"]
     #[payload]
-    payload: Vec<u8>,
+    data: Vec<u8>,
 }
 
 
+impl TlsExtension {
+
+    /// Supported Elliptic Curve formats
+    pub fn ec_point_formats(fmts: &[u8]) -> Self {
+        assert!(fmts.len() < 255);
+        let mut data: Vec<u8> = Vec::with_capacity(fmts.len() + 1);
+        data.push(fmts.len() as u8);
+        data.extend_from_slice(fmts);
+
+        TlsExtension {
+            extension_type: TlsExtensions::ec_point_formats,
+            length: data.len() as u16,
+            data: data
+        }
+    }
+
+    /// Server Name Indication extension
+    pub fn server_name(name: &str) -> Self {
+        let mut data: Vec<u8> = Vec::with_capacity(name.len() + 5);
+        let list_len: u16be = (name.len() + 3) as u16;
+        data.push(((list_len & 0xff00) >> 8) as u8);
+        data.push((list_len & 0xff) as u8);
+
+        data.push(0x00);    // host_name
+
+        let name_len: u16be = name.len() as u16;
+        data.push(((name_len & 0xff00) >> 8) as u8);
+        data.push((name_len & 0xff) as u8);
+
+        let name_s = String::from(name);
+        data.extend_from_slice(name_s.as_bytes());
+
+        TlsExtension {
+            extension_type: TlsExtensions::server_name,
+            length: data.len() as u16,
+            data: data
+        }
+    }
+
+    /// Helper function for generic lists of u16be
+    pub fn generic_u16(ext_type: u16be, d: &[u16be]) -> Self {
+        let mut data: Vec<u8> = Vec::with_capacity(2*d.len());
+
+        for num in d {
+            data.push(((num & 0xff00) >> 8) as u8);
+            data.push((num & 0xff) as u8);
+        }
+
+        TlsExtension {
+            extension_type: ext_type,
+            length: data.len() as u16,
+            data: data
+        }
+    }
+
+    /// Elliptic curves supported
+    pub fn elliptic_curves(curves: &[u16be]) -> Self {
+        let mut data: Vec<u16> = Vec::with_capacity(curves.len() + 1);
+        data.push((curves.len()*2) as u16);
+        data.extend_from_slice(curves);
+
+        TlsExtension::generic_u16(TlsExtensions::supported_groups, &data[..])
+    }
+
+    /// TLS Session Ticket Extension
+    pub fn SessionTicket(ticket: &[u8]) -> Self {
+        let mut data: Vec<u8> = Vec::with_capacity(ticket.len());
+        data.extend_from_slice(ticket);
+
+        TlsExtension {
+            extension_type: TlsExtensions::SessionTicket_TLS,
+            length: data.len() as u16,
+            data: data
+        }
+    }
+
+    /// Signature algorithms
+    pub fn signature_algorithms(algs: &[u16be]) -> Self {
+        let mut data: Vec<u16> = Vec::with_capacity(algs.len() + 1);
+        data.push((algs.len()*2) as u16);
+        data.extend_from_slice(algs);
+
+        TlsExtension::generic_u16(TlsExtensions::signature_algorithms, &data[..])
+    }
+
+    /// Heartbleed enabling extension
+    pub fn heartbeat(mode: u8) -> Self {
+        TlsExtension {
+            extension_type: TlsExtensions::heartbeat,
+            length: 1,
+            data: vec![mode]
+        }
+    }
+}
 
 /// ClientHello, wrapped by a TlsHandshake (which is wrapped by a TlsRecord)
 #[packet]
@@ -143,7 +237,7 @@ pub struct TlsApplicationData {
 
 #[test]
 fn tls_client_hello_test() {
-    let mut packet = [0u8; 88];
+    let mut packet = [0u8; 197];
     {
         let mut tls_record = MutableTlsRecordPacket::new(&mut packet[..]).unwrap();
 
@@ -166,14 +260,175 @@ fn tls_client_hello_test() {
         tls_hello.set_session_id(&vec![]);
 
         tls_hello.set_cipher_suites_length(19*2);
-        tls_hello.set_cipher_suites(&vec![0xc02b, 0xc02f, 0x009e, 0x009c, 0xc00a, 0xc014, 0x0039, 0x0035, 0xc007, 0xc009, 0xc011, 0xc013, 0x0033, 0x0032, 0x0005, 0x0004, 0x002f, 0x000a, 0x00ff]);
+        tls_hello.set_cipher_suites(&vec![
+                                    CipherSuites::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+                                    CipherSuites::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+                                    CipherSuites::TLS_DHE_RSA_WITH_AES_128_GCM_SHA256,
+                                    CipherSuites::TLS_RSA_WITH_AES_128_GCM_SHA256,
+                                    CipherSuites::TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
+                                    CipherSuites::TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
+                                    CipherSuites::TLS_DHE_RSA_WITH_AES_256_CBC_SHA,
+                                    CipherSuites::TLS_RSA_WITH_AES_256_CBC_SHA,
+                                    CipherSuites::TLS_ECDHE_ECDSA_WITH_RC4_128_SHA,
+                                    CipherSuites::TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
+                                    CipherSuites::TLS_ECDHE_RSA_WITH_RC4_128_SHA,
+                                    CipherSuites::TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
+                                    CipherSuites::TLS_DHE_RSA_WITH_AES_128_CBC_SHA,
+                                    CipherSuites::TLS_DHE_DSS_WITH_AES_128_CBC_SHA,
+                                    CipherSuites::TLS_RSA_WITH_RC4_128_SHA,
+                                    CipherSuites::TLS_RSA_WITH_RC4_128_MD5,
+                                    CipherSuites::TLS_RSA_WITH_AES_128_CBC_SHA,
+                                    CipherSuites::TLS_RSA_WITH_3DES_EDE_CBC_SHA,
+                                    CipherSuites::TLS_EMPTY_RENEGOTIATION_INFO_SCSV]);
         tls_hello.set_compression_methods_length(1);
         tls_hello.set_compression_methods(&vec![0x00]);
         tls_hello.set_extensions_length(109);
-        //let ec_pts_fmt = TlsExtension::new(
+        tls_hello.set_extensions(&vec![
+            TlsExtension::ec_point_formats(&vec![
+                EcPointFormats::uncompressed,
+                EcPointFormats::ansiX962_compressed_prime,
+                EcPointFormats::ansiX962_compressed_char2]),
+            TlsExtension::elliptic_curves(&vec![
+                EllipticCurves::sect571r1,
+                EllipticCurves::sect571k1,
+                EllipticCurves::secp521r1,
+                EllipticCurves::sect409k1,
+                EllipticCurves::sect409r1,
+                EllipticCurves::secp384r1,
+                EllipticCurves::sect283k1,
+                EllipticCurves::sect283r1,
+                EllipticCurves::secp256k1,
+                EllipticCurves::secp256r1,
+                EllipticCurves::sect239k1,
+                EllipticCurves::sect233k1,
+                EllipticCurves::sect233r1,
+                EllipticCurves::secp224k1,
+                EllipticCurves::secp224r1,
+                EllipticCurves::sect193r1,
+                EllipticCurves::sect193r2,
+                EllipticCurves::secp192k1,
+                EllipticCurves::secp192r1,
+                EllipticCurves::sect163k1,
+                EllipticCurves::sect163r1,
+                EllipticCurves::sect163r2,
+                EllipticCurves::secp160k1,
+                EllipticCurves::secp160r1,
+                EllipticCurves::secp160r2]),
+            TlsExtension::SessionTicket(&vec![]),
+            TlsExtension::signature_algorithms(&vec![
+                SignatureAlgorithms::sha512 | SignatureAlgorithms::rsa,
+                SignatureAlgorithms::sha512 | SignatureAlgorithms::dsa,
+                SignatureAlgorithms::sha512 | SignatureAlgorithms::ecdsa,
+                SignatureAlgorithms::sha384 | SignatureAlgorithms::rsa,
+                SignatureAlgorithms::sha384 | SignatureAlgorithms::dsa,
+                SignatureAlgorithms::sha384 | SignatureAlgorithms::ecdsa,
+                SignatureAlgorithms::sha256 | SignatureAlgorithms::rsa,
+                SignatureAlgorithms::sha256 | SignatureAlgorithms::dsa,
+                SignatureAlgorithms::sha256 | SignatureAlgorithms::ecdsa,
+                SignatureAlgorithms::sha224 | SignatureAlgorithms::rsa,
+                SignatureAlgorithms::sha224 | SignatureAlgorithms::dsa,
+                SignatureAlgorithms::sha224 | SignatureAlgorithms::ecdsa,
+                SignatureAlgorithms::sha1 | SignatureAlgorithms::rsa,
+                SignatureAlgorithms::sha1 | SignatureAlgorithms::dsa,
+                SignatureAlgorithms::sha1 | SignatureAlgorithms::ecdsa]),
+            TlsExtension::heartbeat(0x01)]);
     }
 
-    let ref_pkt = [0x16, 0x3, 0x1, 0x0, 0xc0, 0x1, 0x0, 0x0, 0xbc, 0x3, 0x3, 0xae, 0xf5, 0x79, 0x3a, 0x91, 0x9e, 0x59, 0x31, 0x33, 0x76, 0x76, 0xbc, 0x44, 0x5b, 0xda, 0xa4, 0xe6, 0xc6, 0x66, 0xd5, 0x7a, 0xff, 0x77, 0x4e, 0x4f, 0x11, 0xd1, 0x54, 0xeb, 0x2c, 0x89, 0x24, 0x0, 0x0, 0x26, 0xc0, 0x2b, 0xc0, 0x2f, 0x0, 0x9e, 0x0, 0x9c, 0xc0, 0xa, 0xc0, 0x14, 0x0, 0x39, 0x0, 0x35, 0xc0, 0x7, 0xc0, 0x9, 0xc0, 0x11, 0xc0, 0x13, 0x0, 0x33, 0x0, 0x32, 0x0, 0x5, 0x0, 0x4, 0x0, 0x2f, 0x0, 0xa, 0x0, 0xff, 0x1, 0x0, 0x0, 0x6d];
+    let ref_pkt = [0x16, /* Record Type: Handshake */
+        0x03, 0x01, /* version TLS 1.0 */
+        0x00, 0xc0, /* length 192 bytes */
+        0x01, /* HS Type: Client hello */
+        0x00, 0x00, 0xbc, /* length 188 bytes */
+        0x03, 0x03, /* client version TLS 1.2 */
+        0xae, 0xf5, 0x79, 0x3a, 0x91, 0x9e, 0x59, 0x31, /*        */
+        0x33, 0x76, 0x76, 0xbc, 0x44, 0x5b, 0xda, 0xa4, /* client */
+        0xe6, 0xc6, 0x66, 0xd5, 0x7a, 0xff, 0x77, 0x4e, /* random */
+        0x4f, 0x11, 0xd1, 0x54, 0xeb, 0x2c, 0x89, 0x24, /* (32 bytes) */
+        0x00, /* session ID length */
+        0x00, 0x26, /* cipher suite length (38 bytes) */
+        0xc0, 0x2b, /* TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256 */
+        0xc0, 0x2f, /* ... */
+        0x00, 0x9e,
+        0x00, 0x9c,
+        0xc0, 0x0a,
+        0xc0, 0x14,
+        0x00, 0x39,
+        0x00, 0x35,
+        0xc0, 0x07,
+        0xc0, 0x09,
+        0xc0, 0x11,
+        0xc0, 0x13,
+        0x00, 0x33,
+        0x00, 0x32,
+        0x00, 0x05,
+        0x00, 0x04,
+        0x00, 0x2f,
+        0x00, 0x0a, /* .. */
+        0x00, 0xff, /* TLS_EMPTY_RENEGOITIATION_INFO_SCSV */
+        0x01, /* compression methods length */
+        0x00, /* compression method Null */
+        0x00, 0x6d, /* extensions length */
+
+        0x00, 0x0b, /* Ext type: ec_point_formats */
+        0x00, 0x04, /* length */
+        0x03, /* list length */
+        0x00, 0x01, 0x02, /* point formats */
+
+        0x00, 0x0a, /* Ext type: elliptic curves */
+        0x00, 0x34, /* length */
+        0x00, 0x32, /* list length */
+        0x00, 0x0e, /* sect571r1 */
+        0x00, 0x0d, /* ... */
+        0x00, 0x19,
+        0x00, 0x0b,
+        0x00, 0x0c,
+        0x00, 0x18,
+        0x00, 0x09,
+        0x00, 0x0a,
+        0x00, 0x16,
+        0x00, 0x17,
+        0x00, 0x08,
+        0x00, 0x06,
+        0x00, 0x07,
+        0x00, 0x14,
+        0x00, 0x15,
+        0x00, 0x04,
+        0x00, 0x05,
+        0x00, 0x12,
+        0x00, 0x13,
+        0x00, 0x01,
+        0x00, 0x02,
+        0x00, 0x03,
+        0x00, 0x0f,
+        0x00, 0x10, /* ... */
+        0x00, 0x11, /* secp160r2 */
+
+        0x00, 0x23, /* Ext type: Session Ticket TLS */
+        0x00, 0x00, /* length */
+
+        0x00, 0x0d, /* Ext type: signature_algorithms */
+        0x00, 0x20, /* length */
+        0x00, 0x1e, /* list length */
+        0x06, 0x01, /* sha512+rsa */
+        0x06, 0x02, /* ... */
+        0x06, 0x03,
+        0x05, 0x01,
+        0x05, 0x02,
+        0x05, 0x03,
+        0x04, 0x01,
+        0x04, 0x02,
+        0x04, 0x03,
+        0x03, 0x01,
+        0x03, 0x02,
+        0x03, 0x03,
+        0x02, 0x01,
+        0x02, 0x02, /* ... */
+        0x02, 0x03, /* sha1+ecdsa */
+
+        0x00, 0x0f, /* Ext type: Heartbeat */
+        0x00, 0x01, /* length */
+        0x01 /* mode */
+            ];
     assert_eq!(&ref_pkt[..], &packet[..]);
 
 }
@@ -214,7 +469,110 @@ pub mod TlsAlertDescription {
 
 */
 
+/// List of TLS extension types
+#[allow(non_snake_case)]
+#[allow(non_upper_case_globals)]
+#[allow(missing_docs)]
+pub mod TlsExtensions {
+    use pnet_macros_support::types::*;
 
+    pub const server_name: u16be = 0x0000;
+    pub const max_fragment_length: u16be = 0x0001;
+    pub const client_certificate_url: u16be = 0x0002;
+    pub const trusted_ca_keys: u16be = 0x0003;
+    pub const truncated_hmac: u16be = 0x0004;
+    pub const status_request: u16be = 0x0005;
+    pub const user_mapping: u16be = 0x0006;
+    pub const client_authz: u16be = 0x0007;
+    pub const server_authz: u16be = 0x0008;
+    pub const cert_type: u16be = 0x0009;
+    pub const supported_groups: u16be = 0x000a; /* renamed from elliptic_curves */
+    pub const ec_point_formats: u16be = 0x000b;
+    pub const srp: u16be = 0x000c;
+    pub const signature_algorithms: u16be = 0x000d;
+    pub const use_srtp: u16be = 0x000e;
+    pub const heartbeat: u16be = 0x000f;
+    pub const application_layer_protocol_negotiation: u16be = 0x0010;
+    pub const status_request_v2: u16be = 0x0011;
+    pub const signed_certificate_timestamp: u16be = 0x0012;
+    pub const client_certificate_type: u16be = 0x0013;
+    pub const server_certificate_type: u16be = 0x0014;
+    pub const padding: u16be = 0x0015;
+    pub const encrypt_then_mac: u16be = 0x0016;
+    pub const extended_master_secret: u16be = 0x0017;
+    pub const token_binding: u16be = 0x0018;    /*(TEMPORARY - registered 2016-02-04, expires 2017-02-04) */
+    pub const cached_info: u16be = 0x0019;
+    pub const SessionTicket_TLS: u16be = 0x0023;
+    pub const renegotiation_info: u16be = 0xff01;
+}
+
+/// SignatureAlgorithms
+#[allow(non_snake_case)]
+#[allow(non_upper_case_globals)]
+#[allow(missing_docs)]
+pub mod SignatureAlgorithms {
+    use pnet_macros_support::types::*;
+    // Hashes
+    pub const none: u16be   = 0x0000;
+    pub const md5: u16be    = 0x0100;
+    pub const sha1: u16be   = 0x0200;
+    pub const sha224: u16be = 0x0300;
+    pub const sha256: u16be = 0x0400;
+    pub const sha384: u16be = 0x0500;
+    pub const sha512: u16be = 0x0600;
+
+    // Signatures
+    pub const anonymous: u16be  = 0x0000;
+    pub const rsa: u16be        = 0x0001;
+    pub const dsa: u16be        = 0x0002;
+    pub const ecdsa: u16be      = 0x0003;
+}
+
+/// Elliptic Curve point formats
+#[allow(non_snake_case)]
+#[allow(non_upper_case_globals)]
+#[allow(missing_docs)]
+pub mod EcPointFormats {
+    pub const uncompressed: u8 = 0x00;
+    pub const ansiX962_compressed_prime: u8 = 0x01;
+    pub const ansiX962_compressed_char2: u8 = 0x02;
+}
+
+/// List of Elliptic Curves
+#[allow(non_snake_case)]
+#[allow(non_upper_case_globals)]
+#[allow(missing_docs)]
+pub mod EllipticCurves {
+    use pnet_macros_support::types::*;
+
+    pub const sect163k1: u16be = 1;
+    pub const sect163r1: u16be = 2;
+    pub const sect163r2: u16be = 3;
+    pub const sect193r1: u16be = 4;
+    pub const sect193r2: u16be = 5;
+    pub const sect233k1: u16be = 6;
+    pub const sect233r1: u16be = 7;
+    pub const sect239k1: u16be = 8;
+    pub const sect283k1: u16be = 9;
+    pub const sect283r1: u16be = 10;
+    pub const sect409k1: u16be = 11;
+    pub const sect409r1: u16be = 12;
+    pub const sect571k1: u16be = 13;
+    pub const sect571r1: u16be = 14;
+    pub const secp160k1: u16be = 15;
+    pub const secp160r1: u16be = 16;
+    pub const secp160r2: u16be = 17;
+    pub const secp192k1: u16be = 18;
+    pub const secp192r1: u16be = 19;
+    pub const secp224k1: u16be = 20;
+    pub const secp224r1: u16be = 21;
+    pub const secp256k1: u16be = 22;
+    pub const secp256r1: u16be = 23;
+    pub const secp384r1: u16be = 24;
+    pub const secp521r1: u16be = 25;
+    pub const arbitrary_explicit_prime_curves: u16be = 0xFF01;
+    pub const arbitrary_explicit_char2_curves: u16be = 0xFF02;
+}
 
 /// List of cipher suites
 #[allow(non_snake_case)]
