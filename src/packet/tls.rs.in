@@ -19,11 +19,11 @@ pub mod TlsContentType {
     /// Change Cipher Specification (begin encryption)
     pub const ChangeCipherSpec: u8 = 20;
     /// Alert record (error occurred)
-    pub const Alert : u8 = 21;
+    pub const Alert: u8 = 21;
     /// Handshake (ClientHello, ServerHello, Certificate, KeyExchange, Finished, etc)
-    pub const Handshake : u8 = 22;
+    pub const Handshake: u8 = 22;
     /// Encrypted Data record
-    pub const ApplicationData : u8 = 23;
+    pub const ApplicationData: u8 = 23;
 }
 
 /// TLS Handshake Types
@@ -32,33 +32,26 @@ pub mod TlsContentType {
 pub mod TlsHandshakeType {
     //use pnet_macros_support::types::*;
 
-    /*
-          hello_request(0), client_hello(1), server_hello(2),
-          certificate(11), server_key_exchange (12),
-          certificate_request(13), server_hello_done(14),
-          certificate_verify(15), client_key_exchange(16),
-          finished(20), (255)
-    */
     /// Hello Request (rarely used)
-    pub const HelloRequest : u8 = 0;
+    pub const HelloRequest: u8 = 0;
     /// Client Hello
-    pub const ClientHello : u8 = 1;
+    pub const ClientHello: u8 = 1;
     /// Server Hello
-    pub const ServerHello : u8 = 2;
+    pub const ServerHello: u8 = 2;
     /// Server Certificate
-    pub const Certificate : u8 = 11;
+    pub const Certificate: u8 = 11;
     /// Server Key Exchange (optional)
-    pub const ServerKeyExchange : u8 = 12;
+    pub const ServerKeyExchange: u8 = 12;
     /// Client Certificate Request (rarely used)
-    pub const CertificateRequest : u8 = 13;
+    pub const CertificateRequest: u8 = 13;
     /// Server Hello Done
-    pub const ServerHelloDone : u8 = 14;
+    pub const ServerHelloDone: u8 = 14;
     /// Certificate Verify
-    pub const CertificateVerify : u8 = 15;
+    pub const CertificateVerify: u8 = 15;
     /// Client Key Exchange
-    pub const ClientKeyExchange : u8 = 16;
+    pub const ClientKeyExchange: u8 = 16;
     /// Finished message (sent by Client and Server)
-    pub const Finished : u8 = 20;
+    pub const Finished: u8 = 20;
 }
 
 /// Represents a TLS record packet
@@ -78,6 +71,7 @@ pub struct TlsRecord {
 pub struct TlsHandshake {
     handshake_type: u8,
     length: u24be,
+    #[length = "length"]
     #[payload]
     payload: Vec<u8>,
 }
@@ -215,6 +209,48 @@ pub struct TlsClientHello {
     #[payload]
     payload: Vec<u8>,   // Unused? Fragment for next packet?
 }
+
+/// Server Hello (wrapped in a TlsHandshake)
+#[packet]
+pub struct TlsServerHello {
+    server_version: u16be,
+    #[length = "32"]
+    random: Vec<u8>,
+
+    session_id_length: u8,
+    #[length = "session_id_length"]
+    session_id: Vec<u8>,
+
+    cipher_suite: u16be,
+    compression_method: u8,
+
+    extensions_length: u16be,
+    #[length = "extensions_length"]
+    extensions: Vec<TlsExtension>,
+
+    #[payload]
+    payload: Vec<u8>,
+}
+
+/// Certificate chain (wrapped in a TlsHandshake)
+#[packet]
+pub struct TlsCertificate {
+    certificates_length: u24be,
+    #[length = "certificates_length"]
+    certificates: Vec<u8>,
+
+    #[payload]
+    payload: Vec<u8>,
+}
+
+/// Server key exchange (TODO)
+#[packet]
+pub struct TlsServerKeyExchange {
+
+    #[payload]
+    payload: Vec<u8>,
+}
+
 
 /// TLS alert packet (wrapped by a TlsRecord)
 #[packet]
@@ -890,4 +926,3 @@ pub mod CipherSuites {
     pub const TLS_DHE_PSK_WITH_CHACHA20_POLY1305_SHA256: u16be = 0xccad;
     pub const TLS_RSA_PSK_WITH_CHACHA20_POLY1305_SHA256: u16be = 0xccae;
 }
-
